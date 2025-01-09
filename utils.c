@@ -3,85 +3,74 @@
 /*                                                        :::      ::::::::   */
 /*   utils.c                                            :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: hallfana <hallfana@student.42.fr>          +#+  +:+       +#+        */
+/*   By: samberna <samberna@student.42perpignan.    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/12/16 21:55:58 by hallfana          #+#    #+#             */
-/*   Updated: 2024/12/16 22:00:58 by hallfana         ###   ########.fr       */
+/*   Created: 2025/01/09 18:58:14 by samberna          #+#    #+#             */
+/*   Updated: 2025/01/09 23:48:38 by samberna         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "philosophers.h"
 
-int	ft_atoi(const char *str)
+void	error_exit(const char *error)
 {
-	int		i;
-	int		sign;
-	long	nbr;
+	printf("ERROR: %s\n", error);
+	exit(1);
+}
 
-	i = 0;
-	sign = 1;
-	nbr = 0;
-	while (str[i] == ' ' || str[i] == '\t' || str[i] == '\n'
-		|| str[i] == '\v' || str[i] == '\f' || str[i] == '\r')
-		i++;
-	if (str[i] == '-')
-		sign = -1;
-	if (str[i] == '-' || str[i] == '+')
-		i++;
-	while (str[i] >= '0' && str[i] <= '9')
+long	gettime(t_time_code time_code)
+{
+	struct timeval	tv;
+
+	if (gettimeofday(&tv, NULL))
+		error_exit("gettimeofday exploded\n");
+	if (SECOND == time_code)
+		return (tv.tv_sec + (tv.tv_usec / 1e6));
+	else if (MILLISECOND == time_code)
+		return ((tv.tv_sec * 1e3) + (tv.tv_usec / 1e3));
+	else if (MICROSECOND == time_code)
+		return ((tv.tv_sec * 1e6) + tv.tv_usec);
+	else
+		error_exit("wrong time_code in gettime()");
+	return (0);
+}
+
+void	precise_usleep(long usec, t_table *table)
+{
+	long	start;
+	long	rem;
+	long	elapsed;
+
+	start = gettime(MICROSECOND);
+	while (gettime(MICROSECOND) - start < usec)
 	{
-		nbr = (nbr * 10) + (str[i] - '0');
-		if (nbr > 2147483647 && sign == 1)
-			return (-1);
-		if (nbr > 2147483648 && sign == -1)
-			return (0);
-		i++;
-	}
-	return (nbr * sign);
-}
-
-void	ft_putnbr_fd(int n, int fd)
-{
-	char	c;
-
-	if (n < 0)
-	{
-		write(fd, "-", 1);
-		n = -n;
-	}
-	if (n >= 10)
-		ft_putnbr_fd(n / 10, fd);
-	c = n % 10 + '0';
-	write(fd, &c, 1);
-}
-
-void	ft_putstr_fd(char *s, int fd)
-{
-	if (s)
-		write(fd, s, ft_strlen(s));
-}
-
-int	ft_strlen(const char *s)
-{
-	int	i;
-
-	i = 0;
-	while (s[i])
-		i++;
-	return (i);
-}
-
-void	ft_usleep(int time)
-{
-	struct timeval	start;
-	struct timeval	now;
-
-	gettimeofday(&start, NULL);
-	while (1)
-	{
-		usleep(50);
-		gettimeofday(&now, NULL);
-		if ((now.tv_sec * 1000000 + now.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec) >= time)
+		if (simu_finish(table))
 			break ;
+		elapsed = gettime(MICROSECOND) - start;
+		rem = usec - elapsed;
+		if (rem > 1e3)
+			usleep(rem / 2);
+		else
+		{
+			while (gettime(MICROSECOND) - start < usec)
+				;
+		}
 	}
+}
+
+void	clean(t_table *table)
+{
+	t_philo	*philo;
+	int		i;
+
+	i = -1;
+	while (++i < table->philo_nbr)
+	{
+		philo = table->philo + i;
+		safe_mutex_handle(&philo->mutex, DESTROY);
+	}
+	safe_mutex_handle(&table->table_mutex, DESTROY);
+	safe_mutex_handle(&table->write_lock, DESTROY);
+	free(table->forks);
+	free(table->philo);
 }
